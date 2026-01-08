@@ -11,7 +11,7 @@ export const getMungerAdvice = async (userInput: string): Promise<MungerResponse
 
   try {
     // 强制指定模型为 gemini-1.5-flash
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // 采用更稳妥的 prompt 注入方式
     const fullPrompt = `${MUNGER_SYSTEM_INSTRUCTION}\n\n用户的问题是：${userInput}`;

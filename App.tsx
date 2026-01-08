@@ -3,32 +3,25 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import html2pdf from 'html2pdf.js';
 import { getMungerAdvice } from './services/geminiService';
-import { MungerResponse } from './types';
 
-// 预设模型，防止加载失败
-const DEFAULT_MODELS = [
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (最新)' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' }
-];
+const DEFAULT_MODELS = [{ id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' }];
 
 function App() {
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<any[]>([]); 
+  const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [models] = useState(DEFAULT_MODELS); 
-
+  const [models] = useState(DEFAULT_MODELS);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // PDF 导出函数
+  // 高清 PDF 导出配置
   const exportToPDF = (elementId: string) => {
     const element = document.getElementById(elementId);
     const opt = {
-      margin: 1,
-      filename: `Munger_Advice_${new Date().getTime()}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+      margin: 0.5,
+      filename: `Munger_Report_${Date.now()}.pdf`,
+      image: { type: 'jpeg', quality: 1 },
+      html2canvas: { scale: 3, useCORS: true },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
     html2pdf().set(opt).from(element).save();
   };
@@ -41,79 +34,81 @@ function App() {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
-    const userMessage = { role: 'user', content: input, timestamp: new Date().toISOString() };
-    setMessages(prev => [...prev, userMessage]);
+    const userMsg = { role: 'user', content: input };
+    setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
     try {
-      const response: MungerResponse = await getMungerAdvice(input);
-      const assistantMessage = { 
-        id: `msg-${Date.now()}`, // 为 PDF 导出提供唯一 ID
+      const res = await getMungerAdvice(input);
+      const assistantMsg = { 
+        id: `report-${Date.now()}`, 
         role: 'assistant', 
-        content: response.content, 
-        timestamp: response.timestamp 
+        content: res.content 
       };
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (err: any) {
-      setError("系统故障。大概是电路里掺杂了太多的废话。再试一次。");
+      setMessages(prev => [...prev, assistantMsg]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: '服务暂时不可用' }]);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white flex flex-col font-sans">
+    <div className="min-h-screen bg-[#0f172a] text-gray-100 flex flex-col">
       <header className="p-4 border-b border-gray-800 flex justify-between items-center bg-[#1e293b]">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-[#10b981] rounded-full flex items-center justify-center text-2xl">🏛️</div>
-          <div>
-            <h1 className="text-xl font-bold text-[#10b981]">芒格智慧圣殿</h1>
-            <p className="text-xs text-gray-400">世俗智慧思维格栅</p>
-          </div>
-        </div>
-        <select className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm">
-          {(models || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        <h1 className="text-xl font-bold text-[#10b981]">🏛️ 芒格智慧圣殿</h1>
+        <select className="bg-gray-800 text-xs border border-gray-700 p-1 rounded">
+          {models.map(m => <option key={m.id}>{m.name}</option>)}
         </select>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 space-y-8">
         {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center opacity-30">
-            <div className="text-6xl mb-4">📖</div>
-            <p>“反过来想，总是反过来想。”</p>
+          <div className="h-full flex items-center justify-center opacity-20">
+            <p className="text-2xl italic font-serif">“反过来想，总是反过来想。”</p>
           </div>
         )}
 
         {(messages || []).map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div 
-              id={msg.id} 
-              className={`max-w-[90%] p-5 rounded-xl ${
-                msg.role === 'user' ? 'bg-[#10b981]' : 'bg-[#1e293b] border border-gray-700'
-              }`}
-            >
-              {msg.role === 'assistant' && (
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs font-bold text-[#10b981] uppercase tracking-wider">查理的深度判断</span>
-                  <button 
-                    onClick={() => exportToPDF(msg.id)}
-                    className="text-[10px] bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition-colors"
-                  >
-                    📥 导出 PDF
-                  </button>
-                </div>
-              )}
-              {/* 支持 Markdown 和表格渲染 */}
-              <div className="prose prose-invert max-w-none prose-table:border prose-th:bg-gray-800 prose-th:p-2 prose-td:p-2 prose-td:border-gray-700">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.content}
-                </ReactMarkdown>
+            {msg.role === 'user' ? (
+              <div className="bg-[#10b981] p-3 rounded-lg max-w-[80%] shadow-lg">
+                {msg.content}
               </div>
-            </div>
+            ) : (
+              /* 模拟你上传的 PDF 样式的报告卡片 */
+              <div className="flex flex-col items-center w-full">
+                <div id={msg.id} className="bg-white text-gray-900 p-8 w-full max-w-[800px] shadow-2xl border-t-[12px] border-[#10b981]">
+                  <div className="flex justify-between border-b-2 border-gray-100 pb-4 mb-6">
+                    <div>
+                      <h2 className="text-xl font-black tracking-tighter uppercase">Munger's Mind Oracle Report</h2>
+                      <p className="text-xs text-gray-400">查理·芒格智慧助手 - 深度分析报告</p>
+                    </div>
+                    <button 
+                      onClick={() => exportToPDF(msg.id)}
+                      className="no-print bg-gray-100 hover:bg-[#10b981] hover:text-white px-3 py-1 rounded text-[10px] font-bold transition-all"
+                    >
+                      DOWNLOAD PDF
+                    </button>
+                  </div>
+                  
+                  <div className="prose prose-sm max-w-none prose-table:border prose-th:bg-gray-50 prose-th:p-2 prose-td:p-2">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+
+                  <div className="mt-8 pt-4 border-t border-dashed border-gray-200 flex justify-between text-[10px] text-gray-400 italic">
+                    <span>Generated by Munger Wisdom Temple</span>
+                    <span>© 2026 Worldly Wisdom Lattice</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ))}
-        {loading && <div className="text-gray-500 animate-pulse">查理正在翻阅思维模型...</div>}
+        {loading && <div className="text-center animate-pulse text-gray-500">正在调动思维格栅...</div>}
         <div ref={messagesEndRef} />
       </main>
 
@@ -124,9 +119,9 @@ function App() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="输入你的困惑..."
-            className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-[#10b981] outline-none"
+            className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#10b981]"
           />
-          <button type="submit" className="bg-[#10b981] px-6 py-3 rounded-lg font-bold">提问</button>
+          <button type="submit" className="bg-[#10b981] px-8 py-3 rounded-xl font-bold hover:bg-[#059669] transition-colors">提问</button>
         </form>
       </footer>
     </div>

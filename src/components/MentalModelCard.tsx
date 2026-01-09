@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { MentalModel } from '../types';
 import { MENTAL_MODELS_100 } from '../models';
@@ -44,8 +43,9 @@ const MentalModelCard: React.FC<Props> = ({ model }) => {
           )}
         </div>
       </div>
-      <p className="text-slate-300 text-sm leading-relaxed border-t border-slate-700/50 pt-3">
-        {model.explanation}
+      {/* ✅ 核心修正：将 .explanation 改为 .brief */}
+      <p className="text-slate-300 text-sm leading-relaxed border-t border-slate-700/50 pt-3 italic">
+        {model.brief || (model as any).explanation || "查理正在深度分析此模型在此情境下的具体应用..."}
       </p>
     </div>
   );

@@ -1,12 +1,13 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// 对应你 models.ts 的接口定义
 export interface ModelEntry {
   id: number;
   symbol: string;
   name: string;
   category: string;
   founder: string;
-  brief: string; // 前端卡片显示的核心字段
+  brief: string; // ⚠️ 前端卡片最关键的字段
 }
 
 export interface MungerResponse {
@@ -20,17 +21,16 @@ const MUNGER_SYSTEM_INSTRUCTION = `你现在扮演查理·芒格。
 你的任务是：针对用户的问题，提供极其深刻的决策建议，并调用思维模型格栅进行分析。
 
 【必须返回纯 JSON 格式，严禁 Markdown 标记】
-结构如下：
+请严格按照此 JSON 结构返回：
 {
   "advice": "核心建议（犀利、直击要害，300字左右）",
   "models": [
     {
-      "id": 1, 
       "symbol": "In", 
       "name": "激励机制", 
       "category": "Psychology", 
       "founder": "Munger", 
-      "brief": "这里必须填写！用一句话解释为什么这个模型适用于当前问题。（例如：因为销售员的提成机制导致了他们的不当行为。）" 
+      "brief": "这里必须填写！用一句话解释为什么这个模型适用于当前问题。" 
     }
   ],
   "lollapalooza": "描述多种因素如何叠加产生后果",
@@ -59,35 +59,56 @@ export const getMungerAdvice = async (userInput: string): Promise<MungerResponse
     const result = await model.generateContent(fullPrompt);
     const text = result.response.text();
     
+    console.log("Gemini Raw:", text); // 调试用
+
     let data;
     try {
       data = JSON.parse(text);
     } catch (e) {
-      // 容错处理
+      // 暴力清洗：有时候 AI 会在 JSON 前后加 ```json
       const match = text.match(/\{[\s\S]*\}/);
       data = match ? JSON.parse(match[0]) : { advice: text, models: [] };
     }
 
-    // 🛡️ 数据清洗兜底（防止空白卡片）
+    // 🛡️ 强力数据清洗 (Data Sanitization)
+    // 这是修复“空白卡片”的核心逻辑
     if (data.models && Array.isArray(data.models)) {
-      data.models = data.models.map((m: any, idx: number) => ({
-        id: m.id || idx,
-        symbol: m.symbol || 'Mj',
-        name: m.name || '思维模型',
-        category: m.category || 'General',
-        founder: m.founder || 'Munger',
-        // 如果 AI 没吐出 brief，强制填入默认文案
-        brief: m.brief || m.description || "查理正在审视该模型在当前局势下的具体应用威力..." 
-      }));
+      data.models = data.models.map((m: any, idx: number) => {
+        // 1. 尝试获取 brief，如果没有，尝试 description，再没有就用 name 兜底
+        let finalBrief = m.brief || m.description || m.explanation || `查理·芒格正在分析 ${m.name || '此模型'} 的具体应用...`;
+        
+        // 2. 确保 symbol 存在，否则样式会乱
+        let finalSymbol = m.symbol || (m.name ? m.name.substring(0, 2).toUpperCase() : "Mj");
+
+        // 3. 确保 category 存在
+        let finalCategory = m.category || "General";
+
+        return {
+          id: m.id || Date.now() + idx,
+          symbol: finalSymbol,
+          name: m.name || '未命名模型',
+          category: finalCategory,
+          founder: m.founder || 'Charlie Munger',
+          brief: finalBrief // 确保这个字段永远有值
+        };
+      });
+    } else {
+      data.models = [];
     }
 
-    return data;
+    // 确保其他字段也不为空
+    return {
+      advice: data.advice || "查理正在思考...",
+      models: data.models,
+      lollapalooza: data.lollapalooza || "多重因素叠加效应分析中...",
+      inversion: data.inversion || "反过来想，总是反过来想。"
+    };
 
   } catch (error) {
     console.error("Gemini Error:", error);
     return {
-      advice: "思维格栅暂时断开连接。请检查网络。",
-      models: [],
+      advice: "思维格栅暂时断开连接。请检查网络或稍后再试。",
+      models: [], // 返回空数组，前端就不会渲染空白卡片了
       lollapalooza: "无法分析",
       inversion: "无法分析"
     };

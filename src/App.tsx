@@ -31,7 +31,9 @@ const App: React.FC = () => {
   const [showExplorer, setShowExplorer] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [user, setUser] = useState<UserState>({ plan: 'free', creditsLeft: 1 });
+  
+  // ✅ 修改点 1: 初始状态改为 3 次
+  const [user, setUser] = useState<UserState>({ plan: 'free', creditsLeft: 3 });
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 判断是否耗尽额度
@@ -52,7 +54,8 @@ const App: React.FC = () => {
 
   const loadUser = (): UserState => {
     const saved = localStorage.getItem('munger_user_state');
-    return saved ? JSON.parse(saved) : { plan: 'free', creditsLeft: 1 };
+    // ✅ 修改点 2: 本地无缓存的新用户，默认给 3 次
+    return saved ? JSON.parse(saved) : { plan: 'free', creditsLeft: 3 };
   };
 
   const updateUser = (plan: UserPlan, credits: number) => {
@@ -139,7 +142,6 @@ const App: React.FC = () => {
                 <p className="text-xs text-slate-500 uppercase tracking-[0.2em] font-medium">The Oracle of Secular Wisdom</p>
               </div>
               
-              {/* ✅ 优化点 1: 中央状态栏变更为可点击的“解锁按钮” */}
               <button 
                 onClick={() => isOutOfCredits && setShowPaywall(true)}
                 className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium border transition-all ${
@@ -226,7 +228,6 @@ const App: React.FC = () => {
             else processQuery(input); 
           }} className="max-w-4xl mx-auto relative">
             
-            {/* ✅ 优化点 2: 没点数时，输入框直接变成“点击解锁”按钮 */}
             <input 
               value={input} 
               onChange={(e) => setInput(e.target.value)} 
@@ -240,7 +241,6 @@ const App: React.FC = () => {
               placeholder={isOutOfCredits ? "🔒 免费次数耗尽，点击订阅解锁无限智慧..." : "向查理提问：如何更好的做出决策？"} 
             />
             
-            {/* ✅ 优化点 3: 发送按钮变成“锁”图标 */}
             <button type="submit" disabled={!isOutOfCredits && (!input.trim() || isLoading)} className={`absolute right-2 top-2 w-12 h-12 rounded-full text-white transition-all shadow-lg flex items-center justify-center ${
               isOutOfCredits 
                 ? 'bg-rose-600 hover:bg-rose-500 hover:scale-105' 

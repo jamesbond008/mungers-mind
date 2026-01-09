@@ -67,13 +67,30 @@ const App: React.FC = () => {
     finally { setIsLoading(false); }
   };
 
+  // ✅ 核心功能：导出 PDF
+  const handleDownload = async (msgId: string) => {
+    if (user.plan === 'free') {
+      setShowPaywall(true);
+      return;
+    }
+    setIsExporting(msgId);
+    // 延迟一点以确保 DOM 渲染完成
+    setTimeout(async () => {
+      await exportToPDF(`msg-container-${msgId}`);
+      setIsExporting(null);
+    }, 100);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
       <header className="flex-none p-4 md:p-6 bg-slate-900 border-b border-slate-800 shadow-xl z-20">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-emerald-700 rounded-full flex items-center justify-center text-xl shadow-lg border border-emerald-500/30">🏛️</div>
-            <h1 className="text-lg md:text-xl font-bold text-emerald-400">芒格智慧圣殿</h1>
+            <div>
+               <h1 className="text-lg md:text-xl font-bold text-emerald-400">芒格智慧圣殿</h1>
+               <p className="text-[10px] text-slate-500 font-mono hidden md:block">LATTICE OF MENTAL MODELS</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="bg-slate-800 px-3 py-1 rounded-full text-xs border border-slate-700">
@@ -90,83 +107,141 @@ const App: React.FC = () => {
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className="max-w-4xl w-full">
-                <div id={`msg-container-${msg.id}`} className="space-y-10 bg-slate-950 p-4 md:p-0">
-                  <p className="text-lg serif text-slate-100">{msg.content}</p>
+                <div id={`msg-container-${msg.id}`} className="space-y-8 bg-slate-950 p-6 rounded-xl border border-slate-900">
+                  {/* 头部：芒格建议 + 下载按钮 */}
+                  <div className="flex justify-between items-start border-b border-slate-800 pb-6 mb-6">
+                     <p className="text-lg serif text-slate-100 leading-relaxed whitespace-pre-wrap flex-1 pr-6">{msg.content}</p>
+                     {msg.data && (
+                        <button 
+                          onClick={() => handleDownload(msg.id)}
+                          className="flex-none text-[10px] uppercase font-bold px-3 py-1.5 bg-emerald-900/30 text-emerald-400 border border-emerald-500/30 rounded hover:bg-emerald-600 hover:text-white transition-colors flex items-center gap-2"
+                        >
+                          {isExporting === msg.id ? (
+                            <span className="animate-spin">⏳</span>
+                          ) : (
+                            <span>⬇ PDF</span>
+                          )}
+                        </button>
+                     )}
+                  </div>
                   
                   {msg.data && (
-                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                       {/* 1. 思维模型格栅区 */}
                       <section>
-                        <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">格栅模型 (Lattice Models)</h3>
+                        <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                           <span className="w-1 h-4 bg-emerald-600"></span>
+                           格栅模型 (Lattice Models)
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {msg.data.models.map((m, i) => <MentalModelCard key={i} model={m} />)}
                         </div>
                       </section>
 
-                      {/* 2. Lollapalooza 效应区 - 修复格式 */}
+                      {/* 2. Lollapalooza 效应区 - 视觉强化 */}
                       <section className="bg-emerald-950/10 border-l-4 border-emerald-600 p-6 rounded-r-xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-2 opacity-10 text-4xl group-hover:scale-110 transition-transform">⚡</div>
+                        <div className="absolute top-0 right-0 p-2 opacity-5 text-6xl group-hover:opacity-10 transition-opacity select-none">⚡</div>
                         <h3 className="flex items-center gap-2 text-emerald-500 font-bold mb-3 text-xs uppercase tracking-widest">
-                          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
                           Lollapalooza 综合效应
                         </h3>
-                        <p className="text-slate-300 text-sm leading-relaxed italic">
+                        <p className="text-slate-300 text-sm leading-relaxed italic border-t border-emerald-500/10 pt-3 mt-2">
                           {msg.data.lollapalooza}
                         </p>
                       </section>
 
-                      {/* 3. 逆向思维区 - 修复格式 */}
-                      <section className="bg-rose-950/10 border border-rose-900/30 p-6 rounded-2xl relative">
+                      {/* 3. 逆向思维区 - 视觉强化 */}
+                      <section className="bg-rose-950/10 border border-rose-900/30 p-6 rounded-2xl relative shadow-[0_0_20px_rgba(225,29,72,0.05)]">
                         <h3 className="flex items-center gap-2 text-rose-500 font-bold mb-4 text-xs uppercase tracking-widest">
                           <span className="text-lg">🔄</span> 逆向思维原则 (Inversion)
                         </h3>
-                        <div className="space-y-3">
-                          <p className="text-rose-200/80 text-sm italic font-serif">
-                            “反过来想，总是反过来想。你应该绝对避免的事：”
-                          </p>
-                          <div className="bg-slate-900/60 p-4 rounded-lg border border-rose-900/20 text-slate-300 text-sm leading-relaxed">
+                        <div className="space-y-4">
+                          <div className="flex gap-3 items-start">
+                             <div className="w-1 h-full bg-rose-500/20 rounded-full min-h-[40px]"></div>
+                             <p className="text-rose-200/80 text-sm italic font-serif leading-relaxed">
+                               “反过来想，总是反过来想。如果我想帮助印度，我应该先问自己：什么会以此毁掉印度？你应该绝对避免的事：”
+                             </p>
+                          </div>
+                          <div className="bg-slate-900/80 p-5 rounded-lg border border-rose-900/20 text-slate-300 text-sm leading-relaxed shadow-inner">
                             {msg.data.inversion}
                           </div>
                         </div>
                       </section>
+                      
+                      {/* PDF 底部水印 */}
+                      <div className="text-center text-[10px] text-slate-600 pt-8 border-t border-slate-900 hidden group-print:block">
+                        Generated by MungersMind.live - The Oracle of Secular Wisdom
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
             </div>
           ))}
-          {isLoading && <div className="text-emerald-500 animate-pulse text-center">查理正在思考...</div>}
+          {isLoading && <div className="text-emerald-500/70 animate-pulse text-center text-sm font-mono mt-8">Thinking... 調動格栅模型中...</div>}
         </div>
         <div className="p-4 bg-slate-900 border-t border-slate-800">
           <form onSubmit={(e) => { e.preventDefault(); processQuery(input); }} className="max-w-4xl mx-auto relative">
-            <input value={input} onChange={(e) => setInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-full py-4 px-6 text-slate-100 focus:border-emerald-500 outline-none" placeholder="输入你的困惑..." />
-            <button type="submit" className="absolute right-2 top-2 w-12 h-12 bg-emerald-600 rounded-full text-white">⬆</button>
+            <input 
+              value={input} 
+              onChange={(e) => setInput(e.target.value)} 
+              className="w-full bg-slate-950 border border-slate-700 rounded-full py-4 px-6 text-slate-100 focus:border-emerald-500 outline-none placeholder:text-slate-600 transition-colors" 
+              placeholder="向查理提问：如何更好的做出决策？" 
+            />
+            <button type="submit" disabled={!input.trim() || isLoading} className="absolute right-2 top-2 w-12 h-12 bg-emerald-600 rounded-full text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-emerald-500/20">
+              ⬆
+            </button>
           </form>
         </div>
       </main>
 
       {showPaywall && (
-        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
-          <div className="max-w-4xl w-full bg-slate-900 border border-emerald-900/50 rounded-3xl p-10 text-center">
-            <h2 className="text-3xl font-serif text-emerald-50 mb-8">Invest In Your Wisdom</h2>
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="max-w-4xl w-full bg-slate-900 border border-emerald-900/50 rounded-3xl p-10 text-center shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-900 via-emerald-500 to-emerald-900"></div>
+            <h2 className="text-3xl font-serif text-emerald-50 mb-2">Invest In Your Wisdom</h2>
+            <p className="text-slate-400 mb-10 text-sm">好的决策是昂贵的，但无知更昂贵。</p>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 text-left">
-                <div className="text-emerald-400 font-bold mb-2">Starter</div>
-                <div className="text-2xl font-bold mb-4">$19<span className="text-sm font-normal text-slate-500">/mo</span></div>
-                <a href={LINKS.STARTER} className="block w-full bg-slate-700 text-center py-2 rounded-lg text-white">订阅</a>
+              {/* Starter */}
+              <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 text-left hover:border-emerald-500/30 transition-colors">
+                <div className="text-emerald-400 font-bold mb-2 text-sm uppercase tracking-wider">Starter</div>
+                <div className="text-3xl font-bold mb-1 text-white">$19<span className="text-sm font-normal text-slate-500">/mo</span></div>
+                <div className="text-xs text-slate-500 mb-6">入门级深度分析</div>
+                <ul className="text-sm text-slate-400 space-y-2 mb-6">
+                   <li className="flex gap-2">✓ 每月 10 次分析</li>
+                   <li className="flex gap-2">✓ PDF 报告导出</li>
+                </ul>
+                <a href={LINKS.STARTER} className="block w-full bg-slate-700 hover:bg-slate-600 text-center py-3 rounded-lg text-white font-bold transition-colors">订阅 Starter</a>
               </div>
-              <div className="bg-emerald-900/20 p-6 rounded-xl border border-emerald-500 text-left scale-110 shadow-2xl">
-                <div className="text-emerald-400 font-bold mb-2">Pro</div>
-                <div className="text-2xl font-bold mb-4">$39<span className="text-sm font-normal text-slate-500">/mo</span></div>
-                <a href={LINKS.PRO} className="block w-full bg-emerald-600 text-center py-2 rounded-lg text-white">无限分析</a>
+              
+              {/* Pro - Highlighted */}
+              <div className="bg-emerald-900/10 p-6 rounded-xl border-2 border-emerald-500 text-left scale-105 shadow-2xl relative">
+                <div className="absolute top-0 right-0 bg-emerald-500 text-black text-[10px] font-bold px-2 py-1 rounded-bl-lg">POPULAR</div>
+                <div className="text-emerald-400 font-bold mb-2 text-sm uppercase tracking-wider">Pro</div>
+                <div className="text-3xl font-bold mb-1 text-white">$39<span className="text-sm font-normal text-slate-500">/mo</span></div>
+                <div className="text-xs text-emerald-500/80 mb-6">无限次使用 + 优先模型</div>
+                <ul className="text-sm text-slate-300 space-y-2 mb-6">
+                   <li className="flex gap-2"><span className="text-emerald-500">✓</span> <strong>无限次</strong> 深度分析</li>
+                   <li className="flex gap-2"><span className="text-emerald-500">✓</span> Lollapalooza 高级视图</li>
+                   <li className="flex gap-2"><span className="text-emerald-500">✓</span> 优先访问新模型库</li>
+                </ul>
+                <a href={LINKS.PRO} className="block w-full bg-emerald-600 hover:bg-emerald-500 text-center py-3 rounded-lg text-white font-bold shadow-lg shadow-emerald-500/20 transition-all">成为 Pro 会员</a>
               </div>
-              <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 text-left">
-                <div className="text-slate-400 font-bold mb-2">Credits</div>
-                <div className="text-2xl font-bold mb-4">$39<span className="text-sm font-normal text-slate-500">/20次</span></div>
-                <a href={LINKS.CREDITS} className="block w-full bg-slate-700 text-center py-2 rounded-lg text-white">一次性购</a>
+              
+              {/* Credits */}
+              <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700 text-left hover:border-emerald-500/30 transition-colors">
+                <div className="text-slate-400 font-bold mb-2 text-sm uppercase tracking-wider">Credits</div>
+                <div className="text-3xl font-bold mb-1 text-white">$39<span className="text-sm font-normal text-slate-500">/once</span></div>
+                <div className="text-xs text-slate-500 mb-6">一次性购买 20 点数</div>
+                <ul className="text-sm text-slate-400 space-y-2 mb-6">
+                   <li className="flex gap-2">✓ 无需订阅</li>
+                   <li className="flex gap-2">✓ 永久有效</li>
+                </ul>
+                <a href={LINKS.CREDITS} className="block w-full bg-slate-700 hover:bg-slate-600 text-center py-3 rounded-lg text-white font-bold transition-colors">购买点数</a>
               </div>
             </div>
-            <button onClick={() => setShowPaywall(false)} className="mt-8 text-slate-500 underline text-sm">稍后再说</button>
+            <button onClick={() => setShowPaywall(false)} className="mt-10 text-slate-600 hover:text-slate-400 underline text-xs transition-colors">不，我要继续保持无知</button>
           </div>
         </div>
       )}

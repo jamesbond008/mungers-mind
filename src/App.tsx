@@ -90,11 +90,45 @@ const App: React.FC = () => {
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className="max-w-4xl w-full">
-                <div id={`msg-container-${msg.id}`} className="space-y-6">
+                <div id={`msg-container-${msg.id}`} className="space-y-10 bg-slate-950 p-4 md:p-0">
                   <p className="text-lg serif text-slate-100">{msg.content}</p>
+                  
                   {msg.data && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {msg.data.models.map((m, i) => <MentalModelCard key={i} model={m} />)}
+                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                      {/* 1. 思维模型格栅区 */}
+                      <section>
+                        <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">格栅模型 (Lattice Models)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {msg.data.models.map((m, i) => <MentalModelCard key={i} model={m} />)}
+                        </div>
+                      </section>
+
+                      {/* 2. Lollapalooza 效应区 - 修复格式 */}
+                      <section className="bg-emerald-950/10 border-l-4 border-emerald-600 p-6 rounded-r-xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-2 opacity-10 text-4xl group-hover:scale-110 transition-transform">⚡</div>
+                        <h3 className="flex items-center gap-2 text-emerald-500 font-bold mb-3 text-xs uppercase tracking-widest">
+                          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                          Lollapalooza 综合效应
+                        </h3>
+                        <p className="text-slate-300 text-sm leading-relaxed italic">
+                          {msg.data.lollapalooza}
+                        </p>
+                      </section>
+
+                      {/* 3. 逆向思维区 - 修复格式 */}
+                      <section className="bg-rose-950/10 border border-rose-900/30 p-6 rounded-2xl relative">
+                        <h3 className="flex items-center gap-2 text-rose-500 font-bold mb-4 text-xs uppercase tracking-widest">
+                          <span className="text-lg">🔄</span> 逆向思维原则 (Inversion)
+                        </h3>
+                        <div className="space-y-3">
+                          <p className="text-rose-200/80 text-sm italic font-serif">
+                            “反过来想，总是反过来想。你应该绝对避免的事：”
+                          </p>
+                          <div className="bg-slate-900/60 p-4 rounded-lg border border-rose-900/20 text-slate-300 text-sm leading-relaxed">
+                            {msg.data.inversion}
+                          </div>
+                        </div>
+                      </section>
                     </div>
                   )}
                 </div>

@@ -1,18 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-// 确保你有这个类型定义，如果没有，使用 geminiService 里的
 import { MungerResponse, getMungerAdvice } from './services/geminiService'; 
 import { exportToPDF } from './services/pdfService';
-
-// 假设你的组件都在这里，如果没有请告诉我
-import MentalModelCard from './components/MentalModelCard';
-import InversionPanel from './components/InversionPanel';
-import ModelExplorer from './components/ModelExplorer';
-// 引入你有的 models.ts 里的类型
+import MentalModelCard from './components/MentalModelCard'; // 确保你有这个组件
+import InversionPanel from './components/InversionPanel';   // 确保你有这个组件
+import ModelExplorer from './components/ModelExplorer';     // 确保你有这个组件
 import { ModelEntry } from './models';
 
-// 你的 Lemon Squeezy 链接
-const STARTER_LINK = "https://mungers-mind.lemonsqueezy.com/checkout/buy/b2b33d63-a09f-41f9-9db9-050a3e6f9652"; 
-const PRO_LINK = "https://mungers-mind.lemonsqueezy.com/checkout/buy/950653fe8-dcf9-47c4-8cd2-f32a0f453d9d";
+// 🔗 你的支付链接
+const LINKS = {
+  STARTER: "https://mungers-mind.lemonsqueezy.com/checkout/buy/b2b33d63-a09f-41f9-9db9-050a3e6f9652",
+  PRO: "https://mungers-mind.lemonsqueezy.com/checkout/buy/950653fe8-dcf9-47c4-8cd2-f32a0f453d9d",
+  CREDITS: "https://mungers-mind.lemonsqueezy.com/checkout/buy/YOUR_CREDITS_LINK" 
+};
+
+// 👤 用户身份类型定义
+type UserPlan = 'free' | 'starter' | 'pro' | 'credits';
+
+interface UserState {
+  plan: UserPlan;
+  creditsLeft: number; // 剩余次数
+}
 
 interface Message {
   id: string;
@@ -28,23 +35,52 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showExplorer, setShowExplorer] = useState(false);
   const [isExporting, setIsExporting] = useState<string | null>(null);
-  
   const [showPaywall, setShowPaywall] = useState(false);
-  const [usageCount, setUsageCount] = useState(0);
 
+  // 👤 用户状态管理
+  const [user, setUser] = useState<UserState>({ plan: 'free', creditsLeft: 1 });
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // 初始化：检查 URL 是否有支付成功回执 (?plan=pro) 或者是本地缓存
   useEffect(() => {
-    const storedCount = localStorage.getItem('munger_usage_count');
-    if (storedCount) setUsageCount(parseInt(storedCount));
+    // 1. 先看 URL 有没有参数（模拟支付回调）
+    const params = new URLSearchParams(window.location.search);
+    const planParam = params.get('plan');
+
+    if (planParam === 'starter') {
+      updateUser('starter', 10);
+    } else if (planParam === 'pro') {
+      updateUser('pro', 9999);
+    } else if (planParam === 'credits') {
+      // 如果是买点数，在原有基础上 +20
+      const current = loadUser();
+      updateUser('credits', (current.creditsLeft || 0) + 20);
+    } else {
+      // 2. 如果没有 URL 参数，读取本地缓存
+      setUser(loadUser());
+    }
   }, []);
+
+  const loadUser = (): UserState => {
+    const saved = localStorage.getItem('munger_user_state');
+    return saved ? JSON.parse(saved) : { plan: 'free', creditsLeft: 1 };
+  };
+
+  const updateUser = (plan: UserPlan, credits: number) => {
+    const newState = { plan, creditsLeft: credits };
+    setUser(newState);
+    localStorage.setItem('munger_user_state', JSON.stringify(newState));
+    // 清除 URL 参数保持干净
+    window.history.replaceState({}, document.title, "/");
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, isLoading]);
 
   const processQuery = async (query: string) => {
-    if (usageCount >= 3) { // 限制免费次数
+    // 🛑 核心拦截逻辑：检查剩余次数
+    if (user.creditsLeft <= 0 && user.plan !== 'pro') {
       setShowPaywall(true);
       return; 
     }
@@ -57,9 +93,7 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // 调用新的 Gemini 2.0 服务
       const result = await getMungerAdvice(query);
-      
       const mungerMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'munger',
@@ -69,13 +103,14 @@ const App: React.FC = () => {
       };
       setMessages(prev => [...prev, mungerMsg]);
 
-      const newCount = usageCount + 1;
-      setUsageCount(newCount);
-      localStorage.setItem('munger_usage_count', newCount.toString());
+      // 📉 扣减次数
+      if (user.plan !== 'pro') {
+        updateUser(user.plan, user.creditsLeft - 1);
+      }
 
     } catch (error) {
       console.error(error);
-      // 错误处理
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'munger', content: "系统连接中断，请重试。", timestamp: Date.now() }]);
     } finally {
       setIsLoading(false);
     }
@@ -86,15 +121,13 @@ const App: React.FC = () => {
     processQuery(`请详细解释“${model.name}”如何应用到现实生活中，以及根据逆向思维，我应该避开哪些坑？`);
   };
 
-  // 修复后的下载逻辑
   const handleDownload = async (msgId: string) => {
-    if (usageCount >= 3) {
+    // 免费用户无法下载
+    if (user.plan === 'free') {
       setShowPaywall(true);
       return;
     }
-
     setIsExporting(msgId);
-    // 这里传入 HTML 元素的 ID (msg-xxxx)
     await exportToPDF(`msg-container-${msgId}`);
     setIsExporting(null);
   };
@@ -106,24 +139,39 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-emerald-700 rounded-full flex items-center justify-center text-xl shadow-lg border border-emerald-500/30">🏛️</div>
             <div>
-              <h1 className="text-lg md:text-xl font-bold tracking-tight text-emerald-400">芒格的智慧圣殿</h1>
+              <h1 className="text-lg md:text-xl font-bold tracking-tight text-emerald-400">芒格智慧圣殿</h1>
               <p className="text-[9px] md:text-xs text-slate-400 font-medium uppercase tracking-widest">世俗智慧思维格栅</p>
             </div>
           </div>
-          <button 
-            onClick={() => setShowExplorer(!showExplorer)}
-            className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all border ${showExplorer ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-emerald-400'}`}
-          >
-            {showExplorer ? '关闭探索器' : '探索 100 个模型'}
-          </button>
+          
+          <div className="flex items-center gap-3">
+            {/* 👤 状态仪表盘 */}
+            <div className="bg-slate-800 px-3 py-1 rounded-full border border-slate-700 text-xs font-mono flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${user.creditsLeft > 0 ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+              {user.plan === 'pro' ? (
+                <span className="text-emerald-400 font-bold">PRO (∞)</span>
+              ) : (
+                <span className="text-slate-300">
+                  {user.plan === 'free' ? 'Trial' : user.plan === 'starter' ? 'Starter' : 'Credits'}: 
+                  <span className="text-white font-bold ml-1">{user.creditsLeft}</span>
+                </span>
+              )}
+            </div>
+
+            <button 
+              onClick={() => setShowExplorer(!showExplorer)}
+              className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all border ${showExplorer ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-emerald-400'}`}
+            >
+              {showExplorer ? '关闭格栅' : '探索模型'}
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="flex-1 relative overflow-hidden flex flex-col">
-        {/* Model Explorer 遮罩 */}
+        {/* Model Explorer */}
         <div className={`absolute inset-0 z-30 p-4 md:p-8 overflow-y-auto transition-all duration-500 bg-slate-950/90 backdrop-blur-sm ${showExplorer ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
           <div className="max-w-6xl mx-auto pb-32">
-            {/* 确保你 components 目录下有这个组件 */}
             <ModelExplorer onSelect={handleModelSelect} />
           </div>
         </div>
@@ -133,9 +181,15 @@ const App: React.FC = () => {
             <div className="max-w-2xl mx-auto text-center mt-20 opacity-40">
               <div className="text-6xl mb-6 text-emerald-900">📜</div>
               <h2 className="text-2xl font-serif mb-2 italic">寻求世俗智慧</h2>
-              <p className="text-sm text-emerald-500 border border-emerald-900/50 bg-emerald-900/10 px-3 py-1 rounded-full inline-block mt-4">
-                 剩余免费次数: {3 - usageCount}
-              </p>
+              {/* 状态展示 */}
+              <div className="mt-6 flex justify-center gap-4 text-xs">
+                <div className="px-4 py-2 bg-slate-900 border border-emerald-900/50 rounded-lg text-emerald-500">
+                  当前身份: <strong className="uppercase">{user.plan}</strong>
+                </div>
+                <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400">
+                  剩余分析: <strong>{user.plan === 'pro' ? '无限' : user.creditsLeft}</strong> 次
+                </div>
+              </div>
             </div>
           )}
 
@@ -145,7 +199,6 @@ const App: React.FC = () => {
                 {msg.role === 'user' ? (
                   <p className="text-md text-emerald-50 font-medium italic">“{msg.content}”</p>
                 ) : (
-                  // 这里加个 ID 方便 PDF 截图
                   <div id={`msg-container-${msg.id}`} className="space-y-10 bg-slate-950 p-4 md:p-0"> 
                     <div className="flex justify-between items-center border-b border-slate-800 pb-6">
                       <div className="flex items-center gap-2">
@@ -155,10 +208,10 @@ const App: React.FC = () => {
                       {msg.data && (
                          <button 
                            onClick={() => handleDownload(msg.id)}
-                           disabled={isExporting === msg.id}
-                           className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-lg transition-all"
+                           className="text-[10px] uppercase tracking-widest font-bold px-4 py-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-lg transition-all flex items-center gap-2"
                          >
-                           {isExporting === msg.id ? '正在生成...' : '下载报告 (PDF)'}
+                           {isExporting === msg.id ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-file-pdf"></i>}
+                           {user.plan === 'free' ? '解锁 PDF 报告' : '下载报告 (PDF)'}
                          </button>
                       )}
                     </div>
@@ -169,11 +222,9 @@ const App: React.FC = () => {
 
                     {msg.data && (
                       <>
-                        {/* 模型卡片展示区 */}
                         <section>
                           <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">格栅模型 (Lattice Models)</h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* 确保 models 存在且是数组，防止白屏 */}
                             {(msg.data.models || []).map((model, idx) => (
                               <MentalModelCard key={idx} model={model} />
                             ))}
@@ -189,7 +240,6 @@ const App: React.FC = () => {
                       </>
                     )}
                     
-                    {/* PDF 页脚签名 (只在打印时有用) */}
                     <div className="hidden print:block mt-8 text-center text-xs text-slate-400 border-t pt-4">
                        Generated by Munger's Mind Oracle
                     </div>
@@ -199,7 +249,7 @@ const App: React.FC = () => {
             </div>
           ))}
           
-          {isLoading && <div className="text-center text-emerald-500 animate-pulse">查理正在思考...</div>}
+          {isLoading && <div className="text-center text-emerald-500 animate-pulse">查理正在调动格栅...</div>}
         </div>
 
         <div className="flex-none p-4 bg-slate-900 border-t border-slate-800 z-40">
@@ -207,7 +257,7 @@ const App: React.FC = () => {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="向查理提问..."
+              placeholder="输入你的困惑..."
               className="w-full bg-slate-950 border border-slate-700 rounded-full py-4 pl-6 pr-16 focus:border-emerald-500 text-slate-100"
               disabled={isLoading}
             />
@@ -218,14 +268,36 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Paywall 弹窗 */}
+      {/* Paywall 保持之前设计，稍微简化 */}
       {showPaywall && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-emerald-500/30 p-8 rounded-2xl max-w-md text-center">
-            <h2 className="text-2xl font-serif text-emerald-50 mb-2">最好的投资是投资自己</h2>
-            <p className="text-slate-400 mb-8 text-sm">您的免费深度分析次数已用完。</p>
-            <a href={STARTER_LINK} className="block w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl mb-3">解锁无限智慧 - $9.99/月</a>
-            <button onClick={() => setShowPaywall(false)} className="text-xs text-slate-500 hover:text-white">暂不升级</button>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="max-w-5xl w-full bg-slate-900 border border-emerald-900/50 rounded-3xl p-6 md:p-10 text-center shadow-2xl relative">
+            <button onClick={() => setShowPaywall(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white">✕</button>
+            <h2 className="text-3xl font-serif text-emerald-50 mb-4">Invest In Your Wisdom</h2>
+            <p className="text-slate-400 mb-8">您的免费体验次数已用完，或该功能需付费解锁。</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* STARTER */}
+              <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
+                <h3 className="text-emerald-400 text-sm uppercase mb-2">Starter</h3>
+                <div className="text-2xl font-bold text-white mb-4">$19<span className="text-sm">/mo</span></div>
+                <a href={LINKS.STARTER} className="block w-full bg-slate-700 py-3 rounded-lg text-white font-bold">订阅 Starter</a>
+              </div>
+              
+              {/* PRO */}
+              <div className="bg-emerald-900/20 p-6 rounded-xl border border-emerald-500">
+                <h3 className="text-emerald-400 text-sm uppercase mb-2">Pro (Unlimited)</h3>
+                <div className="text-2xl font-bold text-white mb-4">$39<span className="text-sm">/mo</span></div>
+                <a href={LINKS.PRO} className="block w-full bg-emerald-600 py-3 rounded-lg text-white font-bold">订阅 Pro</a>
+              </div>
+
+              {/* CREDITS */}
+              <div className="bg-slate-800/50 p-6 rounded-xl border border-slate-700">
+                <h3 className="text-slate-400 text-sm uppercase mb-2">20 Credits</h3>
+                <div className="text-2xl font-bold text-white mb-4">$39<span className="text-sm">/once</span></div>
+                <a href={LINKS.CREDITS} className="block w-full bg-slate-700 py-3 rounded-lg text-white font-bold">购买点数</a>
+              </div>
+            </div>
           </div>
         </div>
       )}

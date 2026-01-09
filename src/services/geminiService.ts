@@ -1,74 +1,40 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export interface ModelEntry {
-  id: number;
-  symbol: string;
-  name: string;
-  category: string;
-  founder: string;
-  brief: string; 
-}
-
-export interface MungerResponse {
-  advice: string;
-  models: ModelEntry[];
-  lollapalooza: string;
-  inversion: string;
-}
-
-const MUNGER_SYSTEM_INSTRUCTION = `你现在扮演查理·芒格。
-你的任务是针对用户问题，提供极其深刻的建议并调用思维模型分析。
-必须返回纯 JSON 格式：
-{
-  "advice": "建议内容",
-  "models": [
-    { "symbol": "In", "name": "激励机制", "category": "心理学", "founder": "芒格", "brief": "此处必须填写该模型的具体应用分析" }
-  ],
-  "lollapalooza": "叠加效应分析",
-  "inversion": "逆向思考建议"
-}`;
-
-export const getMungerAdvice = async (userInput: string): Promise<MungerResponse> => {
+export const getMungerAdvice = async (userInput: string) => {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-2.0-flash",
+    generationConfig: { responseMimeType: "application/json" } 
+  });
 
-  try {
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash",
-      generationConfig: { responseMimeType: "application/json" } 
-    });
+  const prompt = `你现在是查理·芒格。请分析用户问题，并严格返回以下 JSON 格式：
+  {
+    "advice": "你的深刻建议",
+    "models": [
+      {
+        "name": "思维模型名称",
+        "brief": "此处必须填写该模型在此情境下的具体应用分析（不少于50字）",
+        "category": "模型类别",
+        "symbol": "两个字母的缩写",
+        "founder": "创始人"
+      }
+    ],
+    "lollapalooza": "叠加效应分析",
+    "inversion": "逆向思维建议"
+  }`;
 
-    const result = await model.generateContent(`${MUNGER_SYSTEM_INSTRUCTION}\n\n用户问题：${userInput}`);
-    const text = result.response.text();
-    let data = JSON.parse(text);
+  const result = await model.generateContent(`${prompt}\n\n用户困惑：${userInput}`);
+  const data = JSON.parse(result.response.text());
 
-    // 🛡️ 核心修复：强力清洗模型数据，解决内容空白问题
-    if (data.models && Array.isArray(data.models)) {
-      data.models = data.models.map((m: any, idx: number) => ({
-        id: m.id || Date.now() + idx,
-        symbol: m.symbol || (m.name ? m.name.substring(0, 2).toUpperCase() : "Mj"),
-        name: m.name || '核心模型',
-        category: m.category || "General",
-        founder: m.founder || 'Munger',
-        // 关键点：强制将 AI 可能返回的各种描述字段汇总到 brief 字段
-        brief: m.brief || m.description || m.explanation || "正在利用格栅思维分析该模型在当前局势下的具体应用..."
-      }));
-    }
-
-    return {
-      advice: data.advice || "查理正在思考中...",
-      models: data.models || [],
-      lollapalooza: data.lollapalooza || "暂无叠加效应分析",
-      inversion: data.inversion || "反过来想，总是反过来想。"
-    };
-
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    return {
-      advice: "思维格栅连接暂时中断，请重试。",
-      models: [],
-      lollapalooza: "分析失败",
-      inversion: "分析失败"
-    };
+  // 🛡️ 核心修复：强制字段转换，确保 brief 字段永远有值
+  if (data.models && Array.isArray(data.models)) {
+    data.models = data.models.map((m: any) => ({
+      ...m,
+      // 兼容逻辑：即使 AI 返回了 description，也强制转为 brief
+      brief: m.brief || m.description || m.explanation || "查理正在调动思维格栅进行深度分析..."
+    }));
   }
+
+  return data;
 };
